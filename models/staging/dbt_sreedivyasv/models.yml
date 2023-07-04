@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: stg_customers
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+          - dbt_utils.cardinality_equality:
+              field: customer_id
+              to: ref('stg_customers')
+  - name: stg_payments
+    tests:
+      - dbt_utils.expression_is_true:
+          expression: "payment_amount >= 0"
+    columns:
+      - name : payment_id
+        tests:
+              - not_null
+              - unique:
+                  config:
+                    severity: error
+                    error_if: ">100"
+                    warn_if: ">10"
+      - name : payment_amount
+        tests:
+          - average_dollars_spent_greater_than_one:
+              group_by_column: payment_id
+          - dbt_expectations.expect_column_values_to_be_between: 
+          # this will perform what the dbt_utils.expression-is-true test does!
+              min_value: 0
+              row_condition: "payment_id is not null" 
+              strictly: false
+          - dbt_expectations.expect_column_mean_to_be_between: 
+          # this will perform what our singular and generic tests do!
+              min_value: 1
+              group_by: [payment_id] 
+              row_condition: "payment_id is not null" # (Optional)
+              strictly: false
+      - name: payment_status
+        tests:
+          - accepted_values:
+              values: ['success', 'fail']
+              config:
+                limit: 10
+                store_failures: true
+                schema: config_test
+
